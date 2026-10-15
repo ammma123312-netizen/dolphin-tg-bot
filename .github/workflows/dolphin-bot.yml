@@ -2,14 +2,11 @@ name: dolphin-bot
 
 on:
   workflow_dispatch:        # تشغيل يدوي
-  workflow_run:             # إعادة التشغيل تلقائياً بعد انتهاء التشغيل السابق
-    workflows: ["dolphin-bot"]
-    types: [completed]
   schedule:
-    # كل 4 ساعات: ضمان إعادة التشغيل لو فاتت سلسلة workflow_run
-    - cron: '0 */4 * * *'
+    # كل ساعتين: ضمان إعادة التشغيل الدورية حتى لو فشلت سلسلة الـ self-trigger
+    - cron: '0 */2 * * *'
 
-# منع تشغيل أكثر من job واحد في نفس الوقت
+# منع تشغيل أكثر من job واحد في نفس الوقت (الجديد يُتجاهل أثناء تشغيل الحالي)
 concurrency:
   group: dolphin-bot-runner
   cancel-in-progress: false
@@ -21,7 +18,7 @@ permissions:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 330   # 5.5 ساعات كحد أقصى (الحدي الأقصى للـ job هو 6h)
+    timeout-minutes: 330   # 5.5 ساعات كحد أقصى (حد GitHub الأقصى 6h)
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,10 +53,12 @@ jobs:
           timeout 19500 python app.py || true
           echo "Bot run finished."
 
-      - name: Trigger next run
+      - name: Trigger next run immediately
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          # إعادة تشغيل نفس الـ workflow لمواصلة العمل
+          # ننتظر 30 ثانية ثم نعيد تشغيل نفس الـ workflow
+          sleep 30
           gh workflow run "$GITHUB_WORKFLOW" --repo "$GITHUB_REPOSITORY" || true
+          echo "Triggered next run."
